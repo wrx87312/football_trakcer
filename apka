@@ -1,0 +1,182 @@
+import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart'; // Dodany import!
+import 'dart:io';
+import 'database_helper.dart';
+
+void main() => runApp(FootballApp());
+
+class FootballApp extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Pamiętnik Stadionowy',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(primarySwatch: Colors.green, useMaterial3: true),
+      home: LeaguesScreen(),
+    );
+  }
+}
+
+class LeaguesScreen extends StatelessWidget {
+  final List<String> leagues = ['Ekstraklasa', 'Premier League', 'La Liga', 'Serie A', 'Bundesliga'];
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('🏟️ Mój Pamiętnik Stadionowy'), centerTitle: true),
+      body: ListView.builder(
+        itemCount: leagues.length,
+        itemBuilder: (context, index) {
+          return Card(
+            margin: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            child: ListTile(
+              leading: Icon(Icons.stadium, color: Colors.green),
+              title: Text(leagues[index], style: TextStyle(fontWeight: FontWeight.bold)),
+              onTap: () {
+                Navigator.push(context, MaterialPageRoute(builder: (context) => MatchesScreen(leagueName: leagues[index])));
+              },
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class MatchesScreen extends StatefulWidget {
+  final String leagueName;
+  MatchesScreen({required this.leagueName});
+  @override
+  _MatchesScreenState createState() => _MatchesScreenState();
+}
+
+class _MatchesScreenState extends State<MatchesScreen> {
+  List<String> _entries = [];
+
+  @override
+  void initState() { super.initState(); _refreshEntries(); }
+
+  void _refreshEntries() async {
+    final entries = await DatabaseHelper.getMatches(widget.leagueName);
+    setState(() { _entries = entries; });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(widget.leagueName)),
+      body: ListView.builder(
+        itemCount: _entries.length,
+        itemBuilder: (context, index) {
+          final parts = _entries[index].split('|');
+          return Card(
+            margin: EdgeInsets.all(8),
+            child: ListTile(
+              leading: (parts.length > 3 && parts[3].isNotEmpty) 
+                  ? Image.file(File(parts[3]), width: 50, height: 50, fit: BoxFit.cover)
+                  : Icon(Icons.history_edu),
+              title: Text(parts[0]),
+              subtitle: Text("${parts[1]}\n${parts[2]}"),
+            ),
+          );
+        },
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () async {
+          await Navigator.push(context, MaterialPageRoute(builder: (context) => AddMatchScreen(leagueName: widget.leagueName)));
+          _refreshEntries();
+        },
+        child: Icon(Icons.add_a_photo),
+      ),
+    );
+  }
+}
+
+class AddMatchScreen extends StatefulWidget {
+  final String leagueName;
+  AddMatchScreen({required this.leagueName});
+  @override
+  _AddMatchScreenState createState() => _AddMatchScreenState();
+}
+
+class _AddMatchScreenState extends State<AddMatchScreen> {
+  final _matchController = TextEditingController();
+  final _locationController = TextEditingController();
+  final _noteController = TextEditingController();
+  String _imagePath = "";
+
+  // ULEPSZONA FUNKCJA GPS Z GEOCZNIACZKIEM (ADRESEM)
+  Future<void> _getLocation() async {
+    LocationPermission permission = await Geolocator.requestPermission();
+    if (permission == LocationPermission.denied) return;
+    
+    Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+    
+    try {
+      // Zamiana koordynatów na czytelny adres
+      List<Placemark> placemarks = await placemarkFromCoordinates(position.latitude, position.longitude);
+      if (placemarks.isNotEmpty) {
+        Placemark place = placemarks[0];
+        setState(() {
+          // Formatuje adres: Miasto, Ulica
+          _locationController.text = "${place.locality}, ${place.street}";
+        });
+      }
+    } catch (e) {
+      // W razie braku internetu, wpisz same koordynaty
+      setState(() {
+        _locationController.text = "${position.latitude.toStringAsFixed(4)}, ${position.longitude.toStringAsFixed(4)}";
+      });
+    }
+  }
+
+  Future<void> _pickImage() async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+    if (pickedFile != null) {
+      setState(() { _imagePath = pickedFile.path; });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('Nowe wspomnienie')),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: SingleChildScrollView(
+          child: Column(
+            children: [
+              TextField(controller: _matchController, decoration: InputDecoration(labelText: 'Mecz i wynik')),
+              SizedBox(height: 10),
+              TextField(
+                controller: _locationController, 
+                decoration: InputDecoration(
+                  labelText: 'Lokalizacja',
+                  suffixIcon: IconButton(icon: Icon(Icons.my_location), onPressed: _getLocation)
+                )
+              ),
+              SizedBox(height: 10),
+              if (_imagePath.isNotEmpty) Image.file(File(_imagePath), height: 100),
+              TextButton.icon(onPressed: _pickImage, icon: Icon(Icons.image), label: Text("Dodaj zdjęcie")),
+              TextField(controller: _noteController, maxLines: 2, decoration: InputDecoration(labelText: 'Notatki')),
+              SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: () async {
+                  if (_matchController.text.isNotEmpty) {
+                    String entry = "${_matchController.text}|${_locationController.text}|${_noteController.text}|$_imagePath";
+                    await DatabaseHelper.saveMatch(widget.leagueName, entry);
+                    Navigator.pop(context);
+                  }
+                },
+                child: Text('Zapisz w Pamiętniku'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

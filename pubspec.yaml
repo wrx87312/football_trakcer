@@ -1,0 +1,23 @@
+name: football_tracker
+description: Projekt zaliczeniowy - Katalog meczów.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  shared_preferences: ^2.2.2
+  image_picker: ^1.0.4
+  geolocator: ^10.1.0
+  geocoding: ^3.0.0  # Dodano tę linię
+  google_maps_flutter: ^2.5.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true

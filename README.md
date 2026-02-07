@@ -1,4 +1,4 @@
-# 🏟️ Pamiętnik Stadionowy (Match Tracker)
+# 🏟️ Pamiętnik Stadionowy (Football Tracker)
 
 Aplikacja mobilna stworzona we Flutterze, pozwalająca kibicom na dokumentowanie odwiedzonych meczów. Projekt zaliczeniowy z naciskiem na wykorzystanie funkcji sprzętowych urządzenia.
 
